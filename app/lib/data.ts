@@ -17,7 +17,7 @@ export async function fetchRevenue() {
     // console.log('Fetching revenue data...');
     // await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    const data = await sql<Revenue>`SELECT * FROM revenue`;
+    const data = await sql<Revenue>`SELECT * FROM next_dashboard_revenue`;
 
     // console.log('Data fetch completed after 3 seconds.');
 
@@ -31,10 +31,10 @@ export async function fetchRevenue() {
 export async function fetchLatestInvoices() {
   try {
     const data = await sql<LatestInvoiceRaw>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
+      SELECT next_dashboard_invoices.amount, next_dashboard_customers.name, next_dashboard_customers.image_url, next_dashboard_customers.email, next_dashboard_invoices.id
+      FROM next_dashboard_invoices
+      JOIN next_dashboard_customers ON next_dashboard_invoices.customer_id = next_dashboard_customers.id
+      ORDER BY next_dashboard_invoices.date DESC
       LIMIT 5`;
 
     const latestInvoices = data.rows.map((invoice) => ({
@@ -53,12 +53,12 @@ export async function fetchCardData() {
     // You can probably combine these into a single SQL query
     // However, we are intentionally splitting them to demonstrate
     // how to initialize multiple queries in parallel with JS.
-    const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`;
-    const customerCountPromise = sql`SELECT COUNT(*) FROM customers`;
+    const invoiceCountPromise = sql`SELECT COUNT(*) FROM next_dashboard_invoices`;
+    const customerCountPromise = sql`SELECT COUNT(*) FROM next_dashboard_customers`;
     const invoiceStatusPromise = sql`SELECT
          SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-         FROM invoices`;
+         FROM next_dashboard_invoices`;
 
     const data = await Promise.all([
       invoiceCountPromise,
@@ -93,22 +93,22 @@ export async function fetchFilteredInvoices(
   try {
     const invoices = await sql<InvoicesTable>`
       SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
+        next_dashboard_invoices.id,
+        next_dashboard_invoices.amount,
+        next_dashboard_invoices.date,
+        next_dashboard_invoices.status,
+        next_dashboard_customers.name,
+        next_dashboard_customers.email,
+        next_dashboard_customers.image_url
+      FROM next_dashboard_invoices
+      JOIN next_dashboard_customers ON next_dashboard_invoices.customer_id = next_dashboard_customers.id
       WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
+        next_dashboard_customers.name ILIKE ${`%${query}%`} OR
+        next_dashboard_customers.email ILIKE ${`%${query}%`} OR
+        next_dashboard_invoices.amount::text ILIKE ${`%${query}%`} OR
+        next_dashboard_invoices.date::text ILIKE ${`%${query}%`} OR
+        next_dashboard_invoices.status ILIKE ${`%${query}%`}
+      ORDER BY next_dashboard_invoices.date DESC
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
     `;
 
@@ -122,14 +122,14 @@ export async function fetchFilteredInvoices(
 export async function fetchInvoicesPages(query: string) {
   try {
     const count = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
+    FROM next_dashboard_invoices
+    JOIN next_dashboard_customers ON next_dashboard_invoices.customer_id = next_dashboard_customers.id
     WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
+      next_dashboard_customers.name ILIKE ${`%${query}%`} OR
+      next_dashboard_customers.email ILIKE ${`%${query}%`} OR
+      next_dashboard_invoices.amount::text ILIKE ${`%${query}%`} OR
+      next_dashboard_invoices.date::text ILIKE ${`%${query}%`} OR
+      next_dashboard_invoices.status ILIKE ${`%${query}%`}
   `;
 
     const totalPages = Math.ceil(Number(count.rows[0].count) / ITEMS_PER_PAGE);
@@ -144,12 +144,12 @@ export async function fetchInvoiceById(id: string) {
   try {
     const data = await sql<InvoiceForm>`
       SELECT
-        invoices.id,
-        invoices.customer_id,
-        invoices.amount,
-        invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
+        next_dashboard_invoices.id,
+        next_dashboard_invoices.customer_id,
+        next_dashboard_invoices.amount,
+        next_dashboard_invoices.status
+      FROM next_dashboard_invoices
+      WHERE next_dashboard_invoices.id = ${id};
     `;
 
     const invoice = data.rows.map((invoice) => ({
@@ -171,7 +171,7 @@ export async function fetchCustomers() {
       SELECT
         id,
         name
-      FROM customers
+      FROM next_dashboard_customers
       ORDER BY name ASC
     `;
 
@@ -187,20 +187,20 @@ export async function fetchFilteredCustomers(query: string) {
   try {
     const data = await sql<CustomersTableType>`
 		SELECT
-		  customers.id,
-		  customers.name,
-		  customers.email,
-		  customers.image_url,
-		  COUNT(invoices.id) AS total_invoices,
-		  SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
-		  SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
-		FROM customers
-		LEFT JOIN invoices ON customers.id = invoices.customer_id
+		  next_dashboard_customers.id,
+		  next_dashboard_customers.name,
+		  next_dashboard_customers.email,
+		  next_dashboard_customers.image_url,
+		  COUNT(next_dashboard_invoices.id) AS total_invoices,
+		  SUM(CASE WHEN next_dashboard_invoices.status = 'pending' THEN next_dashboard_invoices.amount ELSE 0 END) AS total_pending,
+		  SUM(CASE WHEN next_dashboard_invoices.status = 'paid' THEN next_dashboard_invoices.amount ELSE 0 END) AS total_paid
+		FROM next_dashboard_customers
+		LEFT JOIN next_dashboard_invoices ON next_dashboard_customers.id = next_dashboard_invoices.customer_id
 		WHERE
-		  customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`}
-		GROUP BY customers.id, customers.name, customers.email, customers.image_url
-		ORDER BY customers.name ASC
+		  next_dashboard_customers.name ILIKE ${`%${query}%`} OR
+        next_dashboard_customers.email ILIKE ${`%${query}%`}
+		GROUP BY next_dashboard_customers.id, next_dashboard_customers.name, next_dashboard_customers.email, next_dashboard_customers.image_url
+		ORDER BY next_dashboard_customers.name ASC
 	  `;
 
     const customers = data.rows.map((customer) => ({
